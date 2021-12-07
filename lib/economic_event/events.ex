@@ -200,6 +200,19 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
   end
 
   defp create_somethings(
+      creator,
+      %{
+        action: action,
+        resource_inventoried_as: resource
+      } = event_attrs,
+      _
+    )
+    when not is_nil(resource) and action in ["transfer"] do
+    create_event(creator, event_attrs)
+  end
+
+
+  defp create_somethings(
         creator,
         %{
           resource_inventoried_as: from_existing_resource,
@@ -532,6 +545,28 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
          else _ ->
             Logger.notice("Events.maybe_transfer_resource: did not transfer the resource (could not find or update the to_resource, or user not authorized to do so)")
             {:ok, event}
+    end
+  end
+
+  defp maybe_transfer_resource(
+    %EconomicEvent{
+      resource_inventoried_as_id: resource_id,
+      provider_id: provider_id,
+      receiver_id: receiver_id,
+      action_id: action_id
+    } = event
+  ) when action_id in ["transfer"]
+        and not is_nil(resource_id)
+        and not is_nil(provider_id) and not is_nil(receiver_id)
+        and provider_id != receiver_id do
+    with {:ok, resource} <- EconomicResources.one([:default, id: resource_id]),
+         :ok <- validate_provider_is_primary_accountable(event),
+         {:ok, resource} <- EconomicResources.update(resource, %{primary_accountable: receiver_id}) do
+      Logger.notice("Events.maybe_transfer_resource: updated the primary_accountable of the resource")
+      {:ok, %{event | resource_inventoried_as: resource}}
+    else _ ->
+      Logger.notice("Events.maybe_transfer_resource: did not transfer the resource (could not find or update the resource, or user not authorized to do so)")
+      {:ok, event}
     end
   end
 
