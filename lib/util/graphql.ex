@@ -169,7 +169,7 @@ defmodule ValueFlows.Util.GraphQL do
       if Utils.module_enabled?(CommonsPub.Web.GraphQL.UploadResolver) do
         CommonsPub.Web.GraphQL.UploadResolver.upload(user, changes, info)
       else
-        Logger.error("VF - upload via GraphQL is not implemented")
+        Logger.error("Cannot upload #{inspect changes} - #{inspect info}")
         {:ok, %{}}
       end
     end

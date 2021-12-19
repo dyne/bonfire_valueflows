@@ -42,10 +42,10 @@ defmodule ValueFlows.Process.LiveHandler do
          {:ok, process} <- Processes.update(process, attrs) do
       # IO.inspect(intent)
 
-      redir = if e(attrs, "redirect_after", "") !="" do
-          attrs["redirect_after"]<>process.id
+      redir = if e(attrs, "redirect_after", nil) do
+          e(attrs, "redirect_after", "/process/")<>process.id
          else
-          path(process)
+          e(socket.assigns, :current_url, "#")
          end
 
       {:noreply, socket |> push_redirect(to: redir) }
