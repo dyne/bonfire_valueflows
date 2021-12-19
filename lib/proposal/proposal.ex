@@ -7,7 +7,7 @@ defmodule ValueFlows.Proposal do
     source: "vf_proposal",
     table_id: "6R0P0SA11SMADE0FTW01NTENTS"
 
-  import Bonfire.Repo.Changeset, only: [change_public: 1, change_disabled: 1]
+  import Bonfire.Repo.Common, only: [change_public: 1, change_disabled: 1]
   alias Ecto.Changeset
 
 
@@ -43,7 +43,9 @@ defmodule ValueFlows.Proposal do
 
     belongs_to(:eligible_location, Bonfire.Geolocate.Geolocation)
 
-    many_to_many(:publishes, Intent, join_through: ProposedIntent)
+    has_many(:publishes, ProposedIntent)
+    many_to_many(:publishes_intents, Intent, join_through: ProposedIntent)
+
     many_to_many(:proposed_to, Pointers.Pointer, join_through: ProposedTo)
 
     timestamps(inserted_at: false)
@@ -59,12 +61,12 @@ defmodule ValueFlows.Proposal do
       ) do
     %Proposal{}
     |> Changeset.cast(attrs, @cast)
-    |> Changeset.validate_required(@required)
     |> Changeset.change(
       created: DateTime.utc_now(),
       creator_id: creator.id,
       is_public: true
     )
+    |> Changeset.validate_required(@required)
     |> common_changeset()
   end
 

@@ -56,7 +56,7 @@ defmodule ValueFlows.Planning.Satisfaction do
   @cast @reqr ++
     ~w[
       resource_quantity_id effort_quantity_id note
-      is_public is_disabled
+      disabled_at
     ]a
 
   @spec create_changeset(struct(), attrs()) :: Changeset.t()
@@ -77,7 +77,7 @@ defmodule ValueFlows.Planning.Satisfaction do
 
   @spec common_changeset(Chageset.t(), attrs()) :: Changeset.t()
   defp common_changeset(cset, attrs) do
-    import Bonfire.Repo.Changeset, only: [change_public: 1, change_disabled: 1]
+    import Bonfire.Repo.Common, only: [change_public: 1, change_disabled: 1]
 
     cset
     |> ValueFlows.Util.change_measures(attrs, measure_fields())

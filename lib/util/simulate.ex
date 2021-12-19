@@ -293,13 +293,14 @@ defmodule ValueFlows.Simulate do
   def fake_intent!(user, overrides, unit) do
     measure_attrs = %{unit_id: unit.id}
 
-    measures = %{
-      available_quantity: Bonfire.Quantify.Simulate.measure(measure_attrs),
-      resource_quantity: Bonfire.Quantify.Simulate.measure(measure_attrs),
-      effort_quantity: Bonfire.Quantify.Simulate.measure(measure_attrs)
-    }
-
-    overrides = Map.merge(overrides, measures)
+    overrides = Map.merge(%{
+        provider: Enum.random([user, nil]),
+        receiver: Enum.random([user, nil]),
+        available_quantity: Bonfire.Quantify.Simulate.measure(measure_attrs),
+        resource_quantity: Bonfire.Quantify.Simulate.measure(measure_attrs),
+        effort_quantity: Bonfire.Quantify.Simulate.measure(measure_attrs),
+      },
+      overrides)
 
     {:ok, intent} = Intents.create(user, intent(overrides))
     intent
@@ -312,13 +313,13 @@ defmodule ValueFlows.Simulate do
 
   def fake_proposed_intent!(proposal, intent, overrides \\ %{}) do
     {:ok, proposed_intent} =
-      Proposals.propose_intent(proposal, intent, proposed_intent(overrides))
+      ValueFlows.Proposal.ProposedIntents.propose_intent(proposal, intent, proposed_intent(overrides))
 
     proposed_intent
   end
 
   def fake_proposed_to!(proposed_to, proposed) do
-    {:ok, proposed_to} = Proposals.propose_to(proposed_to, proposed)
+    {:ok, proposed_to} = ValueFlows.Proposal.ProposedTos.propose_to(proposed_to, proposed)
     proposed_to
   end
 

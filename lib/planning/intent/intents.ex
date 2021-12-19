@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 defmodule ValueFlows.Planning.Intent.Intents do
-  import Bonfire.Common.Utils, only: [maybe_put: 3, attr_get_id: 2, maybe: 2, map_key_replace: 3, e: 3, e: 4]
+  import Bonfire.Common.Utils, only: [maybe_put: 3, attr_get_id: 2, maybe: 2, maybe_list: 2, map_key_replace: 3, e: 3, e: 4]
 
   import Bonfire.Common.Config, only: [repo: 0]
 
@@ -11,6 +11,8 @@ defmodule ValueFlows.Planning.Intent.Intents do
   alias ValueFlows.Knowledge.Action.Actions
   alias ValueFlows.Planning.Intent
   alias ValueFlows.Planning.Intent.Queries
+
+  def federation_module, do: ["ValueFlows:Intent", "ValueFlows:Need", "ValueFlows:Offer", "Intent", "Need", "Offer"]
 
   def cursor(), do: &[&1.id]
   def test_cursor(), do: &[&1["id"]]
@@ -94,8 +96,24 @@ defmodule ValueFlows.Planning.Intent.Intents do
 
   def preload_all(%Intent{} = intent) do
     # shouldn't fail
-    {:ok, intent} = one(id: intent.id, preload: :all)
-    preload_action(intent)
+    # {:ok, intent} = one(id: intent.id, preload: :all) # why query again?
+
+    intent
+    |> repo().maybe_preload([
+      :provider,
+      :receiver,
+      :input_of,
+      :output_of,
+      :creator,
+      :context,
+      :at_location,
+      :resource_inventoried_as,
+      :resource_conforms_to,
+      available_quantity: [:unit],
+      effort_quantity: [:unit],
+      resource_quantity: [:unit]
+    ])
+    |> preload_action()
   end
 
   def preload_action(%Intent{} = intent) do
@@ -114,6 +132,9 @@ defmodule ValueFlows.Planning.Intent.Intents do
            intent <- preload_all(%{intent | creator: creator}),
            {:ok, intent} <- ValueFlows.Util.try_tag_thing(nil, intent, attrs),
            {:ok, activity} <- ValueFlows.Util.publish(creator, :intend, intent) do
+
+        Absinthe.Subscription.publish(Bonfire.Web.Endpoint, intent, intent_created: :all)
+        if intent.context_id, do: Absinthe.Subscription.publish(Bonfire.Web.Endpoint, intent, intent_created: intent.context_id)
 
         indexing_object_format(intent) |> ValueFlows.Util.index_for_search()
 
@@ -172,10 +193,20 @@ defmodule ValueFlows.Planning.Intent.Intents do
 
   def indexing_object_format(obj) do
 
+    type = if obj.is_need do
+      "ValueFlows.Planning.Need"
+    else
+      if obj.is_offer do
+        "ValueFlows.Planning.Offer"
+      else
+        "ValueFlows.Planning.Intent"
+      end
+    end
+
     image = ValueFlows.Util.image_url(obj)
 
     %{
-      "index_type" => "ValueFlows.Planning.Intent",
+      "index_type" => type,
       "id" => obj.id,
       # "url" => obj.canonical_url,
       # "icon" => icon,
@@ -188,11 +219,42 @@ defmodule ValueFlows.Planning.Intent.Intents do
     }
   end
 
+  def ap_publish_activity(activity_name, thing) do
+    ValueFlows.Util.Federation.ap_publish_activity(activity_name, :intent, thing, 3, [
+
+    ])
+  end
+
+  def ap_receive_activity(creator, activity, %{data: %{"publishedIn" => proposed_intents_attrs}} = object) when is_list(proposed_intents_attrs) and length(proposed_intents_attrs)>0 do
+    IO.inspect(object, label: "ap_receive_activity - handle Intent with nested ProposedIntent (and usually Proposal too)")
+
+    intent_attrs = pop_in(object, [:data, "publishedIn"]) |> elem(1) # remove nested objects to avoid double-creations
+
+    with {:ok, intent} <- ValueFlows.Util.Federation.ap_receive_activity(creator, activity, intent_attrs, &create/2) do
+
+      proposed_intents = for a_proposed_intent_attrs <- proposed_intents_attrs do
+
+        a_proposed_intent_attrs = a_proposed_intent_attrs |> Map.put(:publishes, intent)
+        IO.inspect(a_proposed_intent_attrs, label: "ap_receive_activity - attrs for a_proposed_intent_attrs")
+
+        with {:ok, proposed_intent} <- ValueFlows.Proposal.ProposedIntents.ap_receive_activity(creator, activity, a_proposed_intent_attrs) do
+          proposed_intent
+        end
+      end
+
+      {:ok, intent |> Map.put(:published_in, proposed_intents)}
+    end
+  end
+
+  def ap_receive_activity(creator, activity, object) do
+    ValueFlows.Util.Federation.ap_receive_activity(creator, activity, object, &create/2)
+  end
+
   def prepare_attrs(attrs, creator \\ nil) do
     attrs
     |> maybe_put(:action_id, e(attrs, :action, :id, e(attrs, :action, nil) ) |> ValueFlows.Knowledge.Action.Actions.id())
     |> maybe_put(:context_id,
-      attrs |> Map.get(:in_scope_of) |> maybe(&List.first/1)
+      attrs |> Map.get(:in_scope_of) |> maybe_list(&List.first/1)
     )
     |> maybe_put(:at_location_id, attr_get_id(attrs, :at_location))
     |> maybe_put(:provider_id, attr_get_id(attrs, :provider))

@@ -4,7 +4,7 @@ defmodule ValueFlows.Process do
     source: "vf_process",
     table_id: "4AYF0R1NPVTST0BEC0ME0VTPVT"
 
-  import Bonfire.Repo.Changeset, only: [change_public: 1, change_disabled: 1]
+  import Bonfire.Repo.Common, only: [change_public: 1, change_disabled: 1]
 
   alias Ecto.Changeset
 
@@ -94,13 +94,21 @@ defmodule ValueFlows.Process do
 
   def create_changeset(
         %{} = creator,
-        attrs \\ %{}
+        attrs
       ) do
     attrs
     |> validate_changeset()
     |> Changeset.change(
       creator_id: creator.id,
     )
+  end
+
+  def create_changeset(
+        _,
+        attrs
+      ) do
+    attrs
+    |> validate_changeset()
   end
 
   def update_changeset(%Process{} = process, attrs) do

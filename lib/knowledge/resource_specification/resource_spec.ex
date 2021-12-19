@@ -4,7 +4,7 @@ defmodule ValueFlows.Knowledge.ResourceSpecification do
     source: "vf_resource_spec",
     table_id: "1PEC1F1CAT10NK1ND0FRES0VRC"
 
-  import Bonfire.Repo.Changeset, only: [change_public: 1, change_disabled: 1]
+  import Bonfire.Repo.Common, only: [change_public: 1, change_disabled: 1]
   import Bonfire.Common.Utils, only: [maybe_put: 3, attr_get_id: 2]
 
   alias Ecto.Changeset
@@ -55,30 +55,39 @@ defmodule ValueFlows.Knowledge.ResourceSpecification do
   @cast @required ++ ~w(note is_disabled context_id image_id)a
 
   def create_changeset(
-        %{} = creator,
+        creator,
         %{id: _} = context,
         attrs
       ) do
-    %ResourceSpecification{}
-    |> Changeset.cast(attrs, @cast)
+    create_changeset(
+        creator,
+        attrs
+      )
     |> Changeset.change(
-      creator_id: creator.id,
-      default_unit_of_effort_id: attr_get_id(attrs, :default_unit_of_effort),
       context_id: context.id,
-      is_public: true
     )
-    |> Changeset.validate_required(@required)
-    |> common_changeset()
   end
 
   def create_changeset(
         %{} = creator,
         attrs
       ) do
+    create_changeset(
+        nil,
+        attrs
+      )
+    |> Changeset.change(
+      creator_id: creator.id,
+    )
+  end
+
+  def create_changeset(
+        _,
+        attrs
+      ) do
     %ResourceSpecification{}
     |> Changeset.cast(attrs, @cast)
     |> Changeset.change(
-      creator_id: creator.id,
       default_unit_of_effort_id: attr_get_id(attrs, :default_unit_of_effort),
       is_public: true
     )

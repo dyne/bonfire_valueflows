@@ -19,20 +19,31 @@ defmodule ValueFlows.Util do
   def publish(%{id: creator_id} = creator, verb, %{id: thing_id} =thing) do
 
     # TODO: make default audience configurable & per object audience selectable by user in API and UI
-    circles = [:local]
+    circles = Bonfire.Common.Config.get_ext(__MODULE__, :publish_to_default_circles, [:local, :activity_pub, :guest])
 
-    if module_enabled?(Bonfire.Me.Users.Boundaries), do: Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, thing, circles) # FIXME, seems to cause infinite loop
+    # IO.inspect(circles: circles)
+    if module_enabled?(Bonfire.Me.Users.Boundaries), do: Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, thing, circles)
 
-    ValueFlows.Util.Federation.ap_publish("create", thing_id, creator_id)
+    # ValueFlows.Util.Federation.ap_publish("create", thing_id, creator_id) # deprecate - publish is triggered by FeedActivities.publish instead
 
-    if module_enabled?(Bonfire.Social.FeedActivities) and Kernel.function_exported?(Bonfire.Social.FeedActivities, :publish, 3) do
+    if module_enabled?(Bonfire.Social.FeedActivities) and Kernel.function_exported?(Bonfire.Social.FeedActivities, :publish, 4) do
 
+      # add to activity feed + maybe federate
       Bonfire.Social.FeedActivities.publish(creator, verb, thing, circles)
 
     else
-      Logger.info("No integration available to publish activity")
+      Logger.info("VF - No integration available to publish activity")
       {:ok, nil}
     end
+  end
+
+  def publish(_creator, verb, %{id: thing_id} =thing) do
+    Logger.info("VF - No creator for object so we don't publish")
+
+    # make visible
+    if module_enabled?(Bonfire.Me.Users.Boundaries), do: Bonfire.Me.Users.Boundaries.maybe_make_visible_for(nil, thing, [:local])
+
+    {:ok, nil}
   end
 
   def publish(%{creator_id: creator_id, id: thing_id}, :update) do
@@ -56,6 +67,20 @@ defmodule ValueFlows.Util do
   def publish(_, verb) do
     Logger.warn("Could not publish (#{verb})")
     {:ok, nil}
+  end
+
+
+  def search_for_matches(%{name: name, note: note, is_offer: true}) do
+    facets = %{index_type: "ValueFlows.Planning.Need"}
+    Bonfire.Search.Fuzzy.search_filtered(name, facets) || Bonfire.Search.Fuzzy.search_filtered(note, facets)
+  end
+  def search_for_matches(%{name: name, note: note, is_need: true}) do
+    facets = %{index_type: "ValueFlows.Planning.Offer"}
+    Bonfire.Search.Fuzzy.search_filtered(name, facets) || Bonfire.Search.Fuzzy.search_filtered(note, facets)
+  end
+
+  def search_for_matches(%{name: name, note: note}) do
+    Bonfire.Search.Fuzzy.search(name) || Bonfire.Search.Fuzzy.search(note)
   end
 
   def index_for_search(object) do
@@ -209,16 +234,17 @@ defmodule ValueFlows.Util do
 
         Map.put(acc, k,
           with false <- is_ulid?(unit),
-          {:error, _} <- Bonfire.Quantify.Units.one(label_or_symbol: unit),
-          {:ok, %{id: id} = new_unit} <- Bonfire.Quantify.Units.create(user, %{label: unit, symbol: unit}) do
+          {:error, e} <- Bonfire.Quantify.Units.get_or_create(unit, user) do
 
-            Map.put(v, :unit_id, id)
-            |> Map.drop([:has_unit])
+            Logger.error(e)
+            raise {:error, "Invalid unit used for quantity"}
 
           else
-            {:ok, %{id: id} = found_unit} ->
+            {:ok, %{id: id} = found_or_created_unit} ->
 
-              Map.put(v, :unit_id, id)
+              v
+              |> Map.put(:unit, found_or_created_unit)
+              |> Map.put(:unit_id, id)
               |> Map.drop([:has_unit])
 
             _ ->
@@ -265,16 +291,29 @@ defmodule ValueFlows.Util do
     end
   end
 
-  def try_tag_thing(user, thing, attrs) do
+  def maybe_classification_id(user, tag) do
+    maybe_classification(user, tag) |> e(:id, nil)
+  end
+
+  def try_tag_thing(user, thing, %{} = attrs) do
     if module_enabled?(Bonfire.Tag.Tags) do
 
       input_tags = Map.get(attrs, :tags, []) ++ Map.get(attrs, :resource_classified_as, []) ++ Map.get(attrs, :classified_as, [])
 
-      Bonfire.Tag.Tags.maybe_tag(user, thing, input_tags)
+      try_tag_thing(user, thing, input_tags)
     else
       {:ok, thing}
     end
   end
+
+  def try_tag_thing(user, thing, tags) when is_list(tags) do
+    if module_enabled?(Bonfire.Tag.Tags) do
+      Bonfire.Tag.Tags.maybe_tag(user, thing, tags)
+    else
+      {:ok, thing}
+    end
+  end
+
 
   def map_values(%{} = map, func) do
     for {k, v} <- map, into: %{}, do: {k, func.(v)}

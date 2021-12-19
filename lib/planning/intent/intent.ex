@@ -4,7 +4,7 @@ defmodule ValueFlows.Planning.Intent do
     source: "vf_intent",
     table_id: "1NTENTC0V1DBEAN0FFER0RNEED"
 
-  import Bonfire.Repo.Changeset, only: [change_public: 1, change_disabled: 1]
+  import Bonfire.Repo.Common, only: [change_public: 1, change_disabled: 1]
 
   alias Ecto.Changeset
 
@@ -28,6 +28,9 @@ defmodule ValueFlows.Planning.Intent do
     belongs_to(:provider, ValueFlows.Util.user_or_org_schema())
     belongs_to(:receiver, ValueFlows.Util.user_or_org_schema())
 
+    field(:is_offer, :boolean, virtual: true)
+    field(:is_need, :boolean, virtual: true)
+
     belongs_to(:available_quantity, Measure, on_replace: :nilify)
     belongs_to(:resource_quantity, Measure, on_replace: :nilify)
     belongs_to(:effort_quantity, Measure, on_replace: :nilify)
@@ -48,7 +51,8 @@ defmodule ValueFlows.Planning.Intent do
 
     belongs_to(:action, Action, type: :string)
 
-    many_to_many(:published_in, Proposal, join_through: ProposedIntent)
+    has_many(:published_in, ProposedIntent)
+    many_to_many(:published_proposals, Proposal, join_through: ProposedIntent)
 
     belongs_to(:input_of, Process)
     belongs_to(:output_of, Process)

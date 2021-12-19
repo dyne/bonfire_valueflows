@@ -5,7 +5,7 @@ defmodule ValueFlows.Claim do
     source: "vf_claim",
     table_id: "40MM0NSPVBVA1VEF10WSC1A1MS"
 
-  import Bonfire.Repo.Changeset, only: [change_public: 1, change_disabled: 1]
+  import Bonfire.Repo.Common, only: [change_public: 1, change_disabled: 1]
 
   alias Ecto.Changeset
 
@@ -55,12 +55,18 @@ defmodule ValueFlows.Claim do
     ~w(context_id resource_conforms_to_id triggered_by_id)a
 
   def create_changeset(%{} = creator, %{id: _} = provider, %{id: _} = receiver, attrs) do
+    create_changeset(creator, attrs)
+    |> Changeset.change(
+      provider_id: provider.id,
+      receiver_id: receiver.id
+    )
+  end
+
+  def create_changeset(%{} = creator, attrs) do
     %__MODULE__{}
     |> Changeset.cast(attrs, @cast)
     |> Changeset.change(
       creator_id: creator.id,
-      provider_id: provider.id,
-      receiver_id: receiver.id,
       is_public: true
     )
     |> common_changeset(attrs)
