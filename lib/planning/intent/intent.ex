@@ -117,36 +117,51 @@ defmodule ValueFlows.Planning.Intent do
     |> ValueFlows.Util.change_measures(attrs, measure_fields())
     |> change_public()
     |> change_disabled()
-    |> validate_datetime()
+    |> datetime_check()
     |> Changeset.foreign_key_constraint(
       :at_location_id,
       name: :vf_intent_at_location_id_fkey
     )
   end
 
-  # validate exclusivity of datetime fields, namely:
-  # has_point_in_time, has_beginning, has_end
-  #
-  # the logic is to allow either of these cases and nothing else
-  # (due is not checked, thus allowed in each case):
-  # * only has_point_in_time
-  # * only has_beginning
-  # * only has_end
-  # * only has_beginning or has_end
-  defp validate_datetime(%Changeset{valid?: false} = cset) do
-    cset
-  end
+  # Validate datetime mutual exclusivity and requirements.
+  # In other words, require one of these combinations to be provided:
+  #   * only :has_point_in_time
+  #   * only :has_beginning and/or :has_end
+  @spec datetime_check(Changeset.t()) :: Changeset.t()
+  defp datetime_check(cset) do
+    import Changeset, only: [get_change: 2, add_error: 3]
 
-  defp validate_datetime(%Changeset{changes: %{has_point_in_time: _, has_beginning: _}} = cset) do
-    Changeset.add_error(cset, :has_beginning, "mutually exclusive to has_point_in_time")
-  end
+    point = get_change(cset, :has_point_in_time)
+    begin = get_change(cset, :has_beginning)
+    endd  = get_change(cset, :has_end)
 
-  defp validate_datetime(%Changeset{changes: %{has_point_in_time: _, has_end: _}} = cset) do
-    Changeset.add_error(cset, :has_end, "mutually exclusive to has_point_in_time")
-  end
+    cond do
+      point && begin ->
+        msg = "has_point_in_time and has_beginning are mutually exclusive"
 
-  defp validate_datetime(%Changeset{} = cset) do
-    cset
+        cset
+        |> add_error(:has_point_in_time, msg)
+        |> add_error(:has_beginning, msg)
+
+      point && endd ->
+        msg = "has_point_in_time and has_end are mutually exclusive"
+
+        cset
+        |> add_error(:has_point_in_time, msg)
+        |> add_error(:has_end, msg)
+
+      point || begin || endd ->
+        cset
+
+      true ->
+        msg = "has_point_in_time or has_beginning or has_end is requried"
+
+        cset
+        |> add_error(:has_beginning, msg)
+        |> add_error(:has_end, msg)
+        |> add_error(:has_point_in_time, msg)
+    end
   end
 
   def context_module, do: ValueFlows.Planning.Intent.Intents

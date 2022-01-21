@@ -134,6 +134,7 @@ defmodule ValueFlows.EconomicEvent do
     )
     |> change_public()
     |> change_disabled()
+    |> datetime_check()
     |> Changeset.foreign_key_constraint(
       :resource_inventoried_as_id,
       name: :vf_event_resource_inventoried_as_id_fkey
@@ -142,6 +143,46 @@ defmodule ValueFlows.EconomicEvent do
       :to_resource_inventoried_as_id,
       name: :vf_event_to_resource_inventoried_as_id_fkey
     )
+  end
+
+  # Validate datetime mutual exclusivity and requirements.
+  # In other words, require one of these combinations to be provided:
+  #   * only :has_point_in_time
+  #   * only :has_beginning and/or :has_end
+  @spec datetime_check(Changeset.t()) :: Changeset.t()
+  defp datetime_check(cset) do
+    import Changeset, only: [get_change: 2, add_error: 3]
+
+    point = get_change(cset, :has_point_in_time)
+    begin = get_change(cset, :has_beginning)
+    endd  = get_change(cset, :has_end)
+
+    cond do
+      point && begin ->
+        msg = "has_point_in_time and has_beginning are mutually exclusive"
+
+        cset
+        |> add_error(:has_point_in_time, msg)
+        |> add_error(:has_beginning, msg)
+
+      point && endd ->
+        msg = "has_point_in_time and has_end are mutually exclusive"
+
+        cset
+        |> add_error(:has_point_in_time, msg)
+        |> add_error(:has_end, msg)
+
+      point || begin || endd ->
+        cset
+
+      true ->
+        msg = "has_point_in_time or has_beginning or has_end is requried"
+
+        cset
+        |> add_error(:has_beginning, msg)
+        |> add_error(:has_end, msg)
+        |> add_error(:has_point_in_time, msg)
+    end
   end
 
   def context_module, do: ValueFlows.EconomicEvent.EconomicEvents
