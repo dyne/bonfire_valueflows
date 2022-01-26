@@ -8,7 +8,8 @@ defmodule ValueFlows.EconomicResource.LiveHandler do
   def handle_event("autocomplete", %{"value"=>search}, socket), do: handle_event("autocomplete", search, socket)
   def handle_event("autocomplete", search, socket) when is_binary(search) do
 
-    options = ( EconomicResources.search(search) || [] )
+    user = current_user(socket)
+    options = ( EconomicResources.search(user, search) || [] )
               |> Enum.map(&to_tuple/1)
     # IO.inspect(matches)
 

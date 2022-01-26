@@ -279,6 +279,10 @@ defmodule ValueFlows.EconomicResource.Queries do
     )
   end
 
+  def filter(q, {:search_name, text}) when is_binary(text) do
+    where(q, [resource: c], ilike(c.name, ^"%#{text}%"))
+  end
+
   def filter(q, {:autocomplete, text}) when is_binary(text) do
     q
     |> select([resource: c],
