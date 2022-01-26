@@ -101,6 +101,8 @@ defmodule ValueFlows.EconomicEvent do
   end
 
   def validate_changeset(attrs \\ %{}) do
+    attrs = datetime_convert(attrs)
+
     %__MODULE__{}
     |> Changeset.cast(attrs, @cast)
     |> ValueFlows.Util.change_measures(attrs, measure_fields())
@@ -143,6 +145,23 @@ defmodule ValueFlows.EconomicEvent do
       :to_resource_inventoried_as_id,
       name: :vf_event_to_resource_inventoried_as_id_fkey
     )
+  end
+
+  defp datetime_convert(attrs) do
+    parse = fn attrs, field ->
+      try do
+        date = Date.from_iso8601!(attrs[field])
+        dt = DateTime.new!(date, ~T"00:00:00")
+        Map.put(attrs, field, dt)
+      rescue
+        _ -> attrs
+      end
+    end
+
+    attrs
+    |> parse.(:has_point_in_time)
+    |> parse.(:has_beginning)
+    |> parse.(:has_end)
   end
 
   # Validate datetime mutual exclusivity and requirements.
