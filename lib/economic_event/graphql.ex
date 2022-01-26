@@ -65,12 +65,12 @@ defmodule ValueFlows.EconomicEvent.GraphQL do
     events_filter_next(:agent, [agent_id: id], page_opts, filters_acc)
   end
 
-  defp events_filter(%{provider: id} = page_opts, filters_acc) do
-    events_filter_next(:provider, [provider_id: id], page_opts, filters_acc)
+  defp events_filter(%{provider_id: id} = page_opts, filters_acc) do
+    events_filter_next(:provider_id, [provider_id: id], page_opts, filters_acc)
   end
 
-  defp events_filter(%{receiver: id} = page_opts, filters_acc) do
-    events_filter_next(:receiver, [receiver_id: id], page_opts, filters_acc)
+  defp events_filter(%{receiver_id: id} = page_opts, filters_acc) do
+    events_filter_next(:receiver_id, [receiver_id: id], page_opts, filters_acc)
   end
 
   defp events_filter(%{action: id} = page_opts, filters_acc) do
@@ -87,6 +87,14 @@ defmodule ValueFlows.EconomicEvent.GraphQL do
 
   defp events_filter(%{at_location: at_location_id} = page_opts, filters_acc) do
     events_filter_next(:at_location, [at_location_id: at_location_id], page_opts, filters_acc)
+  end
+
+  defp events_filter(%{start_date: date} = page_opts, filters_acc) do
+    events_filter_next(:start_date, [start_date: date], page_opts, filters_acc)
+  end
+
+  defp events_filter(%{end_date: date} = page_opts, filters_acc) do
+    events_filter_next(:end_date, [end_date: date], page_opts, filters_acc)
   end
 
   defp events_filter(

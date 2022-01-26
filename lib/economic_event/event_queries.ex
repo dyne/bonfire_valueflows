@@ -245,6 +245,14 @@ defmodule ValueFlows.EconomicEvent.Queries do
     where(q, [event: c], c.to_resource_inventoried_as_id == ^id)
   end
 
+  def filter(q, {:start_date, start_date}) do
+    where(q, [event: c], c.has_point_in_time >= ^start_date or c.has_beginning >= ^start_date)
+  end
+
+  def filter(q, {:end_date, end_date}) do
+    where(q, [event: c], c.has_point_in_time < ^end_date or c.has_end < ^end_date)
+  end
+
 
   def filter(q, {:trace_resource, id}) when is_binary(id) do
     q

@@ -102,6 +102,14 @@ defmodule ValueFlows.EconomicResource.Queries do
     ]
   end
 
+  def filter(q, :preload_primary_accountable) do
+    filter q, [
+      :deleted,
+      preload: :primary_accountable,
+      # preload: :unit_of_effort,
+    ]
+  end
+
   def filter(q, :offer) do
     where(q, [resource: c], is_nil(c.receiver_id))
   end
@@ -179,13 +187,10 @@ defmodule ValueFlows.EconomicResource.Queries do
     where(q, [resource: c], c.context_id in ^ids)
   end
 
-  def filter(q, {:agent_id, id}) when is_binary(id) do
-    where(q, [resource: c], c.primary_accountable_id == ^id or c.creator_id == ^id)
+  def filter(q, {:agent_id, id}) do
+    filter(q, {:primary_accountable_id, id})
   end
 
-  def filter(q, {:agent_id, ids}) when is_list(ids) do
-    where(q, [resource: c], c.primary_accountable_id in ^ids or c.creator_id in ^ids)
-  end
 
   def filter(q, {:primary_accountable_id, id}) when is_binary(id) do
     where(q, [resource: c], c.primary_accountable_id == ^id)
@@ -265,6 +270,10 @@ defmodule ValueFlows.EconomicResource.Queries do
     )
   end
 
+  def filter(q, {:search_name, text}) when is_binary(text) do
+    where(q, [resource: c], ilike(c.name, ^"%#{text}%"))
+  end
+
   def filter(q, {:autocomplete, text}) when is_binary(text) do
     q
     |> select([resource: c],
@@ -319,7 +328,7 @@ defmodule ValueFlows.EconomicResource.Queries do
   end
 
   def filter(q, {:preload, :primary_accountable}) do
-    preload(q, :primary_accountable)
+    preload(q, [primary_accountable: [:profile, :character]])
   end
 
   def filter(q, {:preload, :receiver}) do

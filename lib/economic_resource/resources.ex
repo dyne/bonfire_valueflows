@@ -34,10 +34,9 @@ defmodule ValueFlows.EconomicResource.EconomicResources do
   def many(filters \\ []), do: {:ok, many!(filters)}
   def many!(filters \\ []), do: repo().many(Queries.query(EconomicResource, filters))
 
-  def search(search) do
-   ValueFlows.Util.maybe_search(search, @search_type) || many!(autocomplete: search)
+  def search(current_user, name) do
+    many!([:default, search_name: name, primary_accountable_id: current_user.id])
   end
-
 
   def fields(group_fn, filters \\ [])
       when is_function(group_fn, 1) do
