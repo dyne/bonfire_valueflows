@@ -242,7 +242,7 @@ defmodule ValueFlows.Planning.Intent.GraphQL do
   end
 
   def agent_intents(%{id: agent}, %{} = _page_opts, info) do
-    intents_filtered(%{agent: agent}, info)
+    intents_filtered(%{filter: %{agent: agent}}, info)
   end
 
   def agent_intents(_, _page_opts, _info) do
@@ -250,7 +250,7 @@ defmodule ValueFlows.Planning.Intent.GraphQL do
   end
 
   def provider_intents(%{id: provider}, %{} = _page_opts, info) do
-    intents_filtered(%{provider: provider}, info)
+    intents_filtered(%{filter: %{provider: provider}}, info)
   end
 
   def provider_intents(_, _page_opts, _info) do
