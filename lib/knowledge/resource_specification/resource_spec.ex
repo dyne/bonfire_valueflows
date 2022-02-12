@@ -5,7 +5,7 @@ defmodule ValueFlows.Knowledge.ResourceSpecification do
     table_id: "1PEC1F1CAT10NK1ND0FRES0VRC"
 
   import Bonfire.Repo.Common, only: [change_public: 1, change_disabled: 1]
-  import Bonfire.Common.Utils, only: [maybe_put: 3, attr_get_id: 2]
+  use Bonfire.Common.Utils, only: [maybe_put: 3, attr_get_id: 2]
 
   alias Ecto.Changeset
 
@@ -41,10 +41,10 @@ defmodule ValueFlows.Knowledge.ResourceSpecification do
 
     has_many(:conforming_resources, ValueFlows.EconomicResource, foreign_key: :conforms_to_id)
 
-    many_to_many(:tags, Bonfire.Common.Extend.maybe_schema_or_pointer(Bonfire.Tag),
+    many_to_many(:tags, Pointers.Pointer,
       join_through: Bonfire.Tag.Tagged,
       unique: true,
-      join_keys: [pointer_id: :id, tag_id: :id],
+      join_keys: [id: :id, tag_id: :id],
       on_replace: :delete
     )
 

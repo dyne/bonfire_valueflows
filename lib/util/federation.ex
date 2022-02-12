@@ -1,5 +1,5 @@
 defmodule ValueFlows.Util.Federation do
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
   require Logger
 
   @log_graphql false
@@ -43,6 +43,7 @@ defmodule ValueFlows.Util.Federation do
     :threads,
     :outbox,
     :inbox,
+    :notifications,
     :followers,
     :community_follows,
     :communities,

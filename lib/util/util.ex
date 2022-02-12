@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 defmodule ValueFlows.Util do
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]
 
   require Logger
@@ -8,7 +8,7 @@ defmodule ValueFlows.Util do
   def ensure_edit_permission(%{} = user, %{} = object) do
     # TODO refactor to also use Boundaries (when extension active)
     # TODO check also based on the parent / context? and user's organisation? etc
-    if ValueFlows.Util.is_admin(user) or Map.get(object, :creator_id) == user.id or Map.get(object, :provider_id) == user.id do
+    if ValueFlows.Util.is_admin?(user) or Map.get(object, :creator_id) == user.id or Map.get(object, :provider_id) == user.id do
       :ok
     else
       {:error, :not_permitted}
@@ -187,7 +187,7 @@ defmodule ValueFlows.Util do
     end
   end
 
-  def is_admin(user) do
+  def is_admin?(user) do
     if Map.get(user, :instance_admin) do
       Map.get(user.instance_admin, :is_instance_admin, false)
     else
@@ -196,11 +196,13 @@ defmodule ValueFlows.Util do
   end
 
   def user_schema() do
-    Bonfire.Common.Extend.maybe_schema_or_pointer(Bonfire.Common.Config.get(:user_schema, Bonfire.Data.Identity.User))
+    # Bonfire.Common.Extend.maybe_schema_or_pointer(Bonfire.Common.Config.get(:user_schema, Bonfire.Data.Identity.User))
+    Pointers.Pointer
   end
 
   def org_schema() do
-    Bonfire.Common.Extend.maybe_schema_or_pointer(Bonfire.Common.Config.get(:organisation_schema, user_schema()))
+    # Bonfire.Common.Extend.maybe_schema_or_pointer(Bonfire.Common.Config.get(:organisation_schema, user_schema()))
+    Pointers.Pointer
   end
 
   def user_or_org_schema() do
