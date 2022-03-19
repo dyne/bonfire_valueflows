@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-if Code.ensure_loaded?(Bonfire.GraphQL) do
+if Code.ensure_loaded?(Bonfire.API.GraphQL) do
 defmodule ValueFlows.Knowledge.Action.GraphQL do
 
 
-  require Logger
+  import Where
 
   # use Absinthe.Schema.Notation
   # import_sdl path: "lib/value_flows/graphql/schemas/knowledge.gql"

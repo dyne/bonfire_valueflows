@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-if Code.ensure_loaded?(Bonfire.GraphQL) do
+if Code.ensure_loaded?(Bonfire.API.GraphQL) do
 defmodule ValueFlows.Planning.Intent.GraphQL do
   # default to 100 km radius
   @radius_default_distance 100_000
 
-  require Logger
+  import Where
 
   alias Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]
   alias ValueFlows.Util
 
-  alias Bonfire.GraphQL
-  alias Bonfire.GraphQL.{
+  alias Bonfire.API.GraphQL
+  alias Bonfire.API.GraphQL.{
     ResolveField,
     ResolvePages,
     ResolveRootPage,

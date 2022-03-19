@@ -3,7 +3,7 @@ defmodule ValueFlows.Util do
   use Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]
 
-  require Logger
+  import Where
 
   def ensure_edit_permission(%{} = user, %{} = object) do
     # TODO refactor to also use Boundaries (when extension active)
@@ -19,30 +19,37 @@ defmodule ValueFlows.Util do
   def publish(%{id: creator_id} = creator, verb, %{id: thing_id} =thing) do
 
     # TODO: make default audience configurable & per object audience selectable by user in API and UI
-    preset_boundary = Bonfire.Common.Config.get_ext(__MODULE__, :preset_boundary, "local") |> IO.inspect(label: "VF preset boundary to use")
+    preset_boundary = Bonfire.Common.Config.get_ext(__MODULE__, :preset_boundary, "local") |> debug("VF preset boundary to use")
 
-    circles = Bonfire.Common.Config.get_ext(__MODULE__, :publish_to_default_circles, []) ++ [e(thing, :context_id, nil)] |> IO.inspect(label: "VF: circles to include, including scope if any")
+    circles = Bonfire.Common.Config.get_ext(__MODULE__, :publish_to_default_circles, [])
+              ++ [
+                e(thing, :context_id, nil),
+                e(thing, :provider_id, nil),
+                e(thing, :receiver_id, nil)
+              ]
 
-    # if module_enabled?(Bonfire.Me.Boundaries), do: Bonfire.Me.Boundaries.maybe_make_visible_for(creator, thing, circles)  # deprecate - setting permissions is triggered by FeedActivities.publish instead
+    debug(circles, "VF: circles to include, including scope/provider/receiver and scope if any")
+
+    # if module_enabled?(Bonfire.Boundaries), do: Bonfire.Boundaries.maybe_make_visible_for(creator, thing, circles)  # deprecate - setting permissions is triggered by FeedActivities.publish instead
 
     # ValueFlows.Util.Federation.ap_publish("create", thing_id, creator_id) # deprecate - AP publishing is triggered by FeedActivities.publish instead
 
     if module_enabled?(Bonfire.Social.FeedActivities) and Kernel.function_exported?(Bonfire.Social.FeedActivities, :publish, 4) do
 
       # add to activity feed + maybe federate
-      Bonfire.Social.FeedActivities.publish(creator, verb, thing, preset: preset_boundary, to_circles: circles)
+      Bonfire.Social.FeedActivities.publish(creator, verb, thing, boundary: preset_boundary, to_circles: circles)
 
     else
-      Logger.info("VF - No integration available to publish activity")
+      debug("VF - No integration available to publish activity")
       {:ok, nil}
     end
   end
 
   def publish(_creator, verb, %{id: thing_id} =thing) do
-    Logger.info("VF - No creator for object so we don't publish")
+    debug("VF - No creator for object so we don't publish")
 
-    # make visible
-    if module_enabled?(Bonfire.Me.Boundaries), do: Bonfire.Me.Boundaries.maybe_make_visible_for(nil, thing, [:local])
+    # make visible - FIXME
+    # if module_enabled?(Bonfire.Boundaries), do: Bonfire.Boundaries.maybe_make_visible_for(nil, thing, [:local])
 
     {:ok, nil}
   end
@@ -66,10 +73,17 @@ defmodule ValueFlows.Util do
   end
 
   def publish(_, verb) do
-    Logger.warn("Could not publish (#{verb})")
+    warn("Could not publish (#{verb})")
     {:ok, nil}
   end
 
+  def attr_get_agent(attrs, field, creator) do
+    case Map.get(attrs, field) do
+      "me" -> ulid(creator)
+      id_or_uri_or_username when is_binary(id_or_uri_or_username) -> ulid(id_or_uri_or_username) || Bonfire.Federate.ActivityPub.Utils.get_by_url_ap_id_or_username(id_or_uri_or_username) |> ulid()
+      other -> ulid(other)
+    end
+  end
 
   def search_for_matches(%{name: name, note: note, is_offer: true}) do
     facets = %{index_type: "ValueFlows.Planning.Need"}
@@ -104,7 +118,7 @@ defmodule ValueFlows.Util do
   end
 
   def indexing_format_creator(%Pointers.Pointer{} = pointer) do
-    Bonfire.Common.Pointers.follow!(pointer) |> indexing_format_creator()
+    Bonfire.Common.Pointers.get(pointer) |> indexing_format_creator()
   end
 
   def indexing_format_creator(%{id: id} = creator) when not is_nil(id) do
@@ -130,26 +144,26 @@ defmodule ValueFlows.Util do
 
 
   def image_url(%{icon_id: icon_id} = thing) when not is_nil(icon_id) do
-    # IO.inspect(thing)
-    # IO.inspect(icon_id)
-    # IO.inspect(thing.icon)
+    # debug(thing)
+    # debug(icon_id)
+    # debug(thing.icon)
     Bonfire.Common.Utils.avatar_url(thing)
   end
 
   def image_url(%{image_id: image_id} = thing) when not is_nil(image_id) do
-    # IO.inspect(image_url: thing)
+    # debug(image_url: thing)
     Bonfire.Common.Utils.image_url(thing)
   end
 
   # def image_url(%{icon_id: icon_id} = thing) when not is_nil(icon_id) do
   #   Bonfire.Repo.maybe_preload(thing, icon: [:content_upload, :content_mirror])
-  #   # |> IO.inspect()
+  #   # |> debug()
   #   |> Map.get(:icon)
   #   |> content_url_or_path()
   # end
 
   # def image_url(%{image_id: image_id} = thing) when not is_nil(image_id) do
-  #   #IO.inspect(thing)
+  #   #debug(thing)
   #   Bonfire.Repo.maybe_preload(thing, image: [:content_upload, :content_mirror])
   #   |> Map.get(:image)
   #   |> content_url_or_path()
@@ -239,7 +253,7 @@ defmodule ValueFlows.Util do
           with false <- is_ulid?(unit),
           {:error, e} <- Bonfire.Quantify.Units.get_or_create(unit, user) do
 
-            Logger.error(e)
+            error(e)
             raise {:error, "Invalid unit used for quantity"}
 
           else

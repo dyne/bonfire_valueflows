@@ -11,18 +11,18 @@ defmodule ValueFlows.EconomicResource.LiveHandler do
     user = current_user(socket)
     options = ( EconomicResources.search(user, search) || [] )
               |> Enum.map(&to_tuple/1)
-    # IO.inspect(matches)
+    # debug(matches)
 
     {:noreply, socket |> assign_global(economic_resources_autocomplete: options) }
   end
 
 
   def handle_event("select", %{"id" => select_resource, "name"=> name} = attrs, socket) when is_binary(select_resource) do
-    # IO.inspect(socket)
+    # debug(socket)
 
     selected = {name, select_resource}
 
-    IO.inspect(selected)
+    debug(selected)
     {:noreply, socket |> assign_global(economic_resource_selected: [selected])}
   end
 

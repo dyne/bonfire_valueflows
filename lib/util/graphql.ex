@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-if Code.ensure_loaded?(Bonfire.GraphQL) do
+if Code.ensure_loaded?(Bonfire.API.GraphQL) do
 defmodule ValueFlows.Util.GraphQL do
   import Bonfire.Common.Config, only: [repo: 0]
-  alias Bonfire.GraphQL
-  alias Bonfire.Common.Utils
+  alias Bonfire.API.GraphQL
+  use Bonfire.Common.Utils
 
-  require Logger
+  import Where
 
   # use Absinthe.Schema.Notation
   # import_sdl path: "lib/value_flows/graphql/schemas/util.gql"
@@ -44,7 +44,7 @@ defmodule ValueFlows.Util.GraphQL do
   end
 
   def scope_edge(%{in_scope_of: ids}, page_opts, info),
-    do: Bonfire.GraphQL.CommonResolver.context_edges(%{context_ids: ids}, page_opts, info)
+    do: Bonfire.API.GraphQL.CommonResolver.context_edges(%{context_ids: ids}, page_opts, info)
 
   def scope_edge(%{context_id: id}, page_opts, info),
     do: scope_edge(%{in_scope_of: [id]}, page_opts, info)
@@ -68,13 +68,11 @@ defmodule ValueFlows.Util.GraphQL do
     {:ok, nil}
   end
 
-  def fetch_classifications_edge(%{tags: _tags, resource_classified_as: _} = thing, _, _) do
-    thing = repo().preload(thing, tags: [:peered])
+  def fetch_classifications_edge(%{tags: _tags} = thing, _, _) do
+    thing = repo().maybe_preload(thing, tags: [:peered])
 
     urls = Utils.e(thing, :tags, [])
     |> Enum.map(&Bonfire.Common.URIs.canonical_url(&1))
-    # |> Kernel.++ Utils.e(thing, :resource_classified_as, [])
-    # |> IO.inspect
 
     {:ok, urls }
   end
@@ -163,23 +161,23 @@ defmodule ValueFlows.Util.GraphQL do
   def image_content_url(_, _, _), do: {:ok, nil}
 
   def maybe_upload(user, changes, info) do
-    if Utils.module_enabled?(Bonfire.Files.GraphQL) do
+    if module_enabled?(Bonfire.Files.GraphQL) do
       Bonfire.Files.GraphQL.upload(user, changes, info)
     else
-      if Utils.module_enabled?(CommonsPub.Web.GraphQL.UploadResolver) do
+      if module_enabled?(CommonsPub.Web.GraphQL.UploadResolver) do
         CommonsPub.Web.GraphQL.UploadResolver.upload(user, changes, info)
       else
-        Logger.error("VF - upload via GraphQL is not implemented")
+        error("VF - upload via GraphQL is not implemented")
         {:ok, %{}}
       end
     end
   end
 
   def tags_edges(a, b, c) do
-    if Utils.module_enabled?(Bonfire.Tag.GraphQL.TagResolver) do
+    if module_enabled?(Bonfire.Tag.GraphQL.TagResolver) do
       Bonfire.Tag.GraphQL.TagResolver.tags_edges(a, b, c)
     else
-      Logger.warn("Cannot resolve tags")
+      warn("Cannot resolve tags")
       {:ok, nil}
     end
   end

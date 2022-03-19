@@ -4,8 +4,8 @@ defmodule ValueFlows.Planning.Intent.Intents do
 
   import Bonfire.Common.Config, only: [repo: 0]
 
-  # alias Bonfire.GraphQL
-  alias Bonfire.GraphQL.{Fields, Page}
+  # alias Bonfire.API.GraphQL
+  alias Bonfire.API.GraphQL.{Fields, Page}
   alias ValueFlows.Util
 
   alias ValueFlows.Knowledge.Action.Actions
@@ -82,7 +82,7 @@ defmodule ValueFlows.Planning.Intent.Intents do
       )
 
   def pages(cursor_fn, group_fn, page_opts, base_filters, data_filters, count_filters) do
-    Bonfire.GraphQL.Pagination.pages(
+    Bonfire.API.GraphQL.Pagination.pages(
       Queries,
       Intent,
       cursor_fn,
@@ -237,7 +237,7 @@ defmodule ValueFlows.Planning.Intent.Intents do
         a_proposed_intent_attrs = a_proposed_intent_attrs |> Map.put(:publishes, intent)
         IO.inspect(a_proposed_intent_attrs, label: "ap_receive_activity - attrs for a_proposed_intent_attrs")
 
-        with {:ok, proposed_intent} <- ValueFlows.Proposal.ProposedIntents.ap_receive_activity(creator, activity, a_proposed_intent_attrs) do
+        with {:ok, proposed_intent} <- ValueFlows.Util.Federation.create_nested_object(creator, a_proposed_intent_attrs, intent) do
           proposed_intent
         end
       end
@@ -257,8 +257,8 @@ defmodule ValueFlows.Planning.Intent.Intents do
       attrs |> Map.get(:in_scope_of) |> maybe_list(&List.first/1)
     )
     |> maybe_put(:at_location_id, attr_get_id(attrs, :at_location))
-    |> maybe_put(:provider_id, attr_get_id(attrs, :provider))
-    |> maybe_put(:receiver_id, attr_get_id(attrs, :receiver))
+    |> maybe_put(:provider_id, Util.attr_get_agent(attrs, :provider, creator))
+    |> maybe_put(:receiver_id, Util.attr_get_agent(attrs, :receiver, creator))
     |> maybe_put(:input_of_id, attr_get_id(attrs, :input_of))
     |> maybe_put(:output_of_id, attr_get_id(attrs, :output_of))
     |> maybe_put(:resource_conforms_to_id, attr_get_id(attrs, :resource_conforms_to))

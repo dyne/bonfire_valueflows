@@ -72,10 +72,10 @@ defmodule ValueFlows.Simulate do
   end
 
   def maybe_fake_user(overrides) do
-    if Bonfire.Common.Utils.module_enabled?(Bonfire.Me.Fake) do
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Me.Fake) do
         Bonfire.Me.Fake.fake_user!(overrides)
       else
-        if Bonfire.Common.Utils.module_enabled?(CommonsPub.Utils.Simulate), do: CommonsPub.Utils.Simulate.fake_user!(overrides)
+        if Bonfire.Common.Extend.module_enabled?(CommonsPub.Utils.Simulate), do: CommonsPub.Utils.Simulate.fake_user!(overrides)
       end
   end
   def fake_agent!(overrides \\ %{}, opts \\ []) when is_map(overrides) and is_list(opts) do
@@ -120,8 +120,8 @@ defmodule ValueFlows.Simulate do
     # |> Map.put_new_lazy(:provider, &fake_agent_id/0)
     # |> Map.put_new_lazy(:receiver, &fake_agent_id/0)
     |> Map.put_new_lazy(:note, &summary/0)
-    |> Map.put_new_lazy(:has_beginning, &past_datetime/0)
-    |> Map.put_new_lazy(:has_end, &future_datetime/0)
+    # |> Map.put_new_lazy(:has_beginning, &past_datetime/0)
+    # |> Map.put_new_lazy(:has_end, &future_datetime/0)
     |> Map.put_new_lazy(:has_point_in_time, &future_datetime/0)
     # |> Map.put_new_lazy(:resource_classified_as, fn -> some(1..5, &url/0) end)
     |> Map.put_new_lazy(:is_public, &truth/0)
@@ -201,8 +201,8 @@ defmodule ValueFlows.Simulate do
     |> Map.put_new_lazy(:name, &name/0)
     |> Map.put_new_lazy(:note, &summary/0)
     # |> Map.put_new_lazy(:image, &icon/0)
-    |> Map.put_new_lazy(:has_beginning, &past_datetime/0)
-    |> Map.put_new_lazy(:has_end, &future_datetime/0)
+    # |> Map.put_new_lazy(:has_beginning, &past_datetime/0)
+    # |> Map.put_new_lazy(:has_end, &future_datetime/0)
     |> Map.put_new_lazy(:created, &future_datetime/0)
     |> Map.put_new_lazy(:unit_based, &bool/0)
     |> Map.put_new_lazy(:is_public, &truth/0)
@@ -240,8 +240,8 @@ defmodule ValueFlows.Simulate do
     |> Map.put_new_lazy(:note, &summary/0)
     # |> Map.put_new_lazy(:image, &icon/0)
     |> Map.put_new_lazy(:action, &action_id/0)
-    |> Map.put_new_lazy(:has_beginning, &past_datetime/0)
-    |> Map.put_new_lazy(:has_end, &future_datetime/0)
+    # |> Map.put_new_lazy(:has_beginning, &past_datetime/0)
+    # |> Map.put_new_lazy(:has_end, &future_datetime/0)
     |> Map.put_new_lazy(:has_point_in_time, &future_datetime/0)
     |> Map.put_new_lazy(:due, &future_datetime/0)
     # TODO: list of URIs?
@@ -258,8 +258,8 @@ defmodule ValueFlows.Simulate do
     # |> Map.put_new_lazy("image", &icon/0)
     |> Map.put_new_lazy("action", &action_id/0)
     # |> Map.put_new_lazy("resource_classified_as", fn -> some(1..5, &url/0) end)
-    |> Map.put_new_lazy("has_beginning", &past_datetime_iso/0)
-    |> Map.put_new_lazy("has_end", &future_datetime_iso/0)
+    # |> Map.put_new_lazy("has_beginning", &past_datetime_iso/0)
+    # |> Map.put_new_lazy("has_end", &future_datetime_iso/0)
     |> Map.put_new_lazy("has_point_in_time", &future_datetime_iso/0)
     |> Map.put_new_lazy("due", &future_datetime_iso/0)
     |> Map.put_new_lazy("finished", &bool/0)
@@ -395,13 +395,13 @@ defmodule ValueFlows.Simulate do
   ## Aliases for functions in other Bonfire extensions ##
 
   def some_fake_categories(user, num \\ 5) do
-    if Bonfire.Common.Utils.module_enabled?(Bonfire.Classify.Simulate),
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Classify.Simulate),
     do: some(num, fn -> Bonfire.Classify.Simulate.fake_category!(user).id end),
     else: []
   end
 
   def maybe_fake_unit(user) do
-    if Bonfire.Common.Utils.module_enabled?(Bonfire.Quantify.Simulate),
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Quantify.Simulate),
     do: Bonfire.Quantify.Simulate.fake_unit!(user),
     else: %{id: nil}
   end

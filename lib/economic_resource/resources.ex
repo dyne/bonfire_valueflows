@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 defmodule ValueFlows.EconomicResource.EconomicResources do
-  use Bonfire.Common.Utils, only: [maybe_put: 3, attr_get_id: 2, maybe_get_id: 1, maybe: 2, map_key_replace: 3, e: 3]
+  use Bonfire.Common.Utils, only: [maybe_put: 3, attr_get_id: 2, ulid: 1, maybe: 2, map_key_replace: 3, e: 3]
 
   import Bonfire.Common.Config, only: [repo: 0]
   alias ValueFlows.Util
 
-  # alias Bonfire.GraphQL
-  alias Bonfire.GraphQL.{Fields, Page}
+  # alias Bonfire.API.GraphQL
+  alias Bonfire.API.GraphQL.{Fields, Page}
 
   alias ValueFlows.EconomicResource
   alias ValueFlows.EconomicResource.Queries
@@ -80,7 +80,7 @@ defmodule ValueFlows.EconomicResource.EconomicResources do
       )
 
   def pages(cursor_fn, group_fn, page_opts, base_filters, data_filters, count_filters) do
-    Bonfire.GraphQL.Pagination.pages(
+    Bonfire.API.GraphQL.Pagination.pages(
       Queries,
       EconomicResource,
       cursor_fn,
@@ -94,11 +94,11 @@ defmodule ValueFlows.EconomicResource.EconomicResources do
 
 
   def inputs_of(process) when not is_nil(process) do
-    many([:default, [join: [event_input: maybe_get_id(process)]]])
+    many([:default, [join: [event_input: ulid(process)]]])
   end
 
   def outputs_of(process) when not is_nil(process) do
-    many([:default, join: [event_output: maybe_get_id(process)]])
+    many([:default, join: [event_output: ulid(process)]])
   end
 
 
@@ -187,7 +187,7 @@ defmodule ValueFlows.EconomicResource.EconomicResources do
 
   defp prepare_attrs(attrs, creator \\ nil) do
     attrs
-    |> maybe_put(:primary_accountable_id, attr_get_id(attrs, :primary_accountable) || maybe_get_id(creator))
+    |> maybe_put(:primary_accountable_id, attr_get_id(attrs, :primary_accountable) || ulid(creator))
     |> maybe_put(:context_id,
       attrs |> Map.get(:in_scope_of) |> maybe(&List.first/1)
     )

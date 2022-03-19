@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-if Code.ensure_loaded?(Bonfire.GraphQL) do
+if Code.ensure_loaded?(Bonfire.API.GraphQL) do
 defmodule ValueFlows.Agent.GraphQL do
-  alias Bonfire.GraphQL
+  alias Bonfire.API.GraphQL
 
-  require Logger
+  import Where
 
   # use Absinthe.Schema.Notation
   # import_sdl path: "lib/value_flows/graphql/schemas/agent.gql"
@@ -22,7 +22,7 @@ defmodule ValueFlows.Agent.GraphQL do
   # with pagination
   def people(page_opts, info) do
     people_pages =
-      if Bonfire.Common.Utils.module_enabled?(CommonsPub.Web.GraphQL.UsersResolver) do
+      if Bonfire.Common.Extend.module_enabled?(CommonsPub.Web.GraphQL.UsersResolver) do
         with {:ok, users_pages} <- CommonsPub.Web.GraphQL.UsersResolver.users(page_opts, info) do
           people =
             Enum.map(
@@ -53,17 +53,17 @@ defmodule ValueFlows.Agent.GraphQL do
 
   # TODO: pagination
   def all_people(%{}, info) do
-    {:ok, ValueFlows.Agent.People.people(Bonfire.GraphQL.current_user(info))}
+    {:ok, ValueFlows.Agent.People.people(Bonfire.API.GraphQL.current_user(info))}
   end
 
   def person(%{id: id}, info) do
-    {:ok, ValueFlows.Agent.People.person(id, Bonfire.GraphQL.current_user(info))}
+    {:ok, ValueFlows.Agent.People.person(id, Bonfire.API.GraphQL.current_user(info))}
   end
 
   # with pagination
   def organizations(page_opts, info) do
     orgz_pages =
-      if Bonfire.Common.Utils.module_enabled?(Organisation.GraphQL.Resolver) do
+      if Bonfire.Common.Extend.module_enabled?(Organisation.GraphQL.Resolver) do
         with {:ok, pages} <- Organisation.GraphQL.Resolver.organisations(page_opts, info) do
           orgz =
             Enum.map(
@@ -84,23 +84,23 @@ defmodule ValueFlows.Agent.GraphQL do
 
   # without pagination
   def all_organizations(%{}, info) do
-    {:ok, ValueFlows.Agent.Organizations.organizations(Bonfire.GraphQL.current_user(info))}
+    {:ok, ValueFlows.Agent.Organizations.organizations(Bonfire.API.GraphQL.current_user(info))}
   end
 
   def organization(%{id: id}, info) do
     {:ok,
      ValueFlows.Agent.Organizations.organization(
        id,
-       Bonfire.GraphQL.current_user(info)
+       Bonfire.API.GraphQL.current_user(info)
      )}
   end
 
   def all_agents(%{}, info) do
-    {:ok, ValueFlows.Agent.Agents.agents(Bonfire.GraphQL.current_user(info))}
+    {:ok, ValueFlows.Agent.Agents.agents(Bonfire.API.GraphQL.current_user(info))}
   end
 
   def agent(%{id: id}, info) do
-    {:ok, ValueFlows.Agent.Agents.agent(id, Bonfire.GraphQL.current_user(info))}
+    {:ok, ValueFlows.Agent.Agents.agent(id, Bonfire.API.GraphQL.current_user(info))}
   end
 
   def agent(_, info) do

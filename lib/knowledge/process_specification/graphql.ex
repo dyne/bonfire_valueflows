@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-if Code.ensure_loaded?(Bonfire.GraphQL) do
+if Code.ensure_loaded?(Bonfire.API.GraphQL) do
 defmodule ValueFlows.Knowledge.ProcessSpecification.GraphQL do
 
-  require Logger
+  import Where
 
   import Bonfire.Common.Config, only: [repo: 0]
   alias ValueFlows.Util
 
-  alias Bonfire.GraphQL
-  alias Bonfire.GraphQL.{
+  alias Bonfire.API.GraphQL
+  alias Bonfire.API.GraphQL.{
     ResolveField,
     ResolvePages,
     ResolveRootPage,

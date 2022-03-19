@@ -1,13 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 defmodule ValueFlows.EconomicEvent.EconomicEvents do
-  use OK.Pipe
-
   use Bonfire.Common.Utils
+  use Arrows
   import Bonfire.Common.Config, only: [repo: 0]
   alias ValueFlows.Util
 
-  # alias Bonfire.GraphQL
-  alias Bonfire.GraphQL.{Fields, Page}
+  # alias Bonfire.API.GraphQL
+  alias Bonfire.API.GraphQL.{Fields, Page}
 
   alias ValueFlows.Knowledge.Resource
   alias ValueFlows.EconomicEvent
@@ -19,9 +18,10 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
   alias ValueFlows.Process.Processes
   alias ValueFlows.ValueCalculation.ValueCalculations
 
-  import Bonfire.Fail.Error
+  import Bonfire.Fail
 
   require Logger
+  import Where
 
   def federation_module, do: ["ValueFlows:EconomicEvent", "EconomicEvent"]
 
@@ -84,7 +84,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
       )
 
   def pages(cursor_fn, group_fn, page_opts, base_filters, data_filters, count_filters) do
-    Bonfire.GraphQL.Pagination.pages(
+    Bonfire.API.GraphQL.Pagination.pages(
       Queries,
       EconomicEvent,
       cursor_fn,
@@ -123,14 +123,14 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
   def inputs_of(attrs, action_id \\ nil)
 
   def inputs_of(process, action_id) when not is_nil(action_id) do
-    case maybe_get_id(process) do
+    case ulid(process) do
       id when is_binary(id) -> many([:default, input_of_id: id, action_id: action_id])
       _ -> {:ok, nil}
     end
   end
 
   def inputs_of(process, _) do
-    case maybe_get_id(process) do
+    case ulid(process) do
       id when is_binary(id) -> many([:default, input_of_id: id])
       _ -> {:ok, nil}
     end
@@ -139,14 +139,14 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
   def outputs_of(attrs, action_id \\ nil)
 
   def outputs_of(process, action_id) when not is_nil(action_id) do
-    case maybe_get_id(process) do
+    case ulid(process) do
       id when is_binary(id) -> many([:default, output_of_id: id, action_id: action_id])
       _ -> {:ok, nil}
     end
   end
 
   def outputs_of(process, _) do
-    case maybe_get_id(process) do
+    case ulid(process) do
       id when is_binary(id) -> many([:default, output_of_id: id])
       _ -> {:ok, nil}
     end
@@ -183,7 +183,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
       do
 
     error =  "Oops, you cannot act on three resources in one event."
-    Logger.warn("Events.create/3: "<>error)
+    warn("Events.create/3: "<>error)
 
     IO.inspect(event_with_three_resources: [
       %{
@@ -220,7 +220,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
         _
       )
       when not is_nil(from_existing_resource) do
-    Logger.notice("Events.create/3: recording an event between two EXISTING resources")
+    debug("Events.create/3: recording an event between two EXISTING resources")
 
     create_event(creator, event_attrs)
   end
@@ -235,7 +235,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
         }
       )
       when not is_nil(from_existing_resource) do
-    Logger.notice("Events.create/3: creating a new TO resource to go with an existing FROM resource")
+    debug("Events.create/3: creating a new TO resource to go with an existing FROM resource")
 
     new_resource_attrs =
       new_inventoried_resource
@@ -259,7 +259,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
         }
       )
       when not is_nil(to_existing_resource) do
-    Logger.notice("Events.create/3: creating a new FROM resource to go with an existing TO resource")
+    debug("Events.create/3: creating a new FROM resource to go with an existing TO resource")
 
     new_resource_attrs =
       new_inventoried_resource
@@ -277,7 +277,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
         new_inventoried_resource: new_inventoried_resource
       }) do
 
-    Logger.notice("Events.create/3: creating a NEW resource")
+    debug("Events.create/3: creating a NEW resource")
 
     new_resource_attrs =
       new_inventoried_resource
@@ -296,7 +296,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
   end
 
   defp create_somethings(creator, event_attrs, _) do
-    Logger.notice("Events.create/3: creating an event but NOT a resource")
+    debug("Events.create/3: creating an event but NOT a resource")
     create_event(creator, event_attrs)
   end
 
@@ -304,7 +304,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
   defp create_with_action(creator, event_attrs, %{resource_effect: resource_effect} = _action)
       when resource_effect == "increment" do
 
-    Logger.notice("Events.create_with_action: incrementing (eg. producing or raising a new resource), using info from the event and/or resource_conforms_to")
+    debug("Events.create_with_action: incrementing (eg. producing or raising a new resource), using info from the event and/or resource_conforms_to")
 
     IO.inspect(create_with_action: event_attrs)
 
@@ -344,7 +344,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
         }
 
     new_inventoried_resource_attrs = with {:ok, fetched} <- EconomicResources.one([:preload_primary_accountable, id: resource_inventoried_as_id]) do
-      Logger.notice(log<>" creating the target resource based on info from resource_inventoried_as and the event")
+      debug(log<>" creating the target resource based on info from resource_inventoried_as and the event")
 
       Bonfire.Common.Utils.maybe_to_map(
         attrs
@@ -353,7 +353,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
         ))
 
     else _ ->
-      Logger.notice(log<>" creating a blank target resource (based on info from the event)")
+      debug(log<>" creating a blank target resource (based on info from the event)")
 
       attrs
     end
@@ -380,7 +380,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
         }
 
     new_inventoried_resource_attrs = with {:ok, fetched} <- EconomicResources.one([:preload_primary_accountable, id: resource_inventoried_as_id]) do
-      Logger.notice(log<>" creating the target resource based on info from resource_inventoried_as and the event")
+      debug(log<>" creating the target resource based on info from resource_inventoried_as and the event")
 
       Bonfire.Common.Utils.maybe_to_map(
         attrs
@@ -389,7 +389,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
         ))
 
     else _ ->
-      Logger.notice(log<>" creating a blank target resource (based on info from the event)")
+      debug(log<>" creating a blank target resource (based on info from the event)")
 
       attrs
     end
@@ -401,7 +401,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
   end
 
   defp create_with_action(creator, event_attrs, _) do
-    Logger.notice("Events.create_with_action: creating an event but not a resource")
+    debug("Events.create_with_action: creating an event but not a resource")
     create_event(creator, event_attrs)
   end
 
@@ -543,11 +543,11 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
          :ok <- validate_provider_is_primary_accountable(event),
          {:ok, to_resource} <- EconomicResources.update(to_resource, %{primary_accountable: receiver_id}) do
 
-            Logger.notice("Events.maybe_transfer_resource: updated the primary_accountable of the to_resource")
+            debug("Events.maybe_transfer_resource: updated the primary_accountable of the to_resource")
             {:ok, %{event | to_resource_inventoried_as: to_resource}}
 
          else _ ->
-            Logger.notice("Events.maybe_transfer_resource: did not transfer the resource (could not find or update the to_resource, or user not authorized to do so)")
+            debug("Events.maybe_transfer_resource: did not transfer the resource (could not find or update the to_resource, or user not authorized to do so)")
             {:ok, event}
     end
   end
@@ -575,7 +575,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
   end
 
   defp maybe_transfer_resource(event) do
-    Logger.notice("Events.maybe_transfer_resource: did not transfer the resource (criteria not met)")
+    debug("Events.maybe_transfer_resource: did not transfer the resource (criteria not met)")
     {:ok, event}
   end
 
@@ -607,8 +607,8 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
   end
 
   defp validate_user_involvement(creator, event) do
-    Logger.error("VF - Permission error, creator is #{inspect creator} and provider is #{inspect event.provider} and receiver is #{inspect event.receiver}")
-   {:error, error(403, "You cannot do this because you are not involved in that event.")}
+    error("VF - Permission error, creator is #{inspect creator} and provider is #{inspect event.provider} and receiver is #{inspect event.receiver}")
+   {:error, fail(403, "You cannot do this because you are not involved in that event.")}
   end
 
   defp validate_provider_is_primary_accountable(
@@ -649,7 +649,7 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
          or provider_id == resource.primary_accountable_id do
         :ok
       else
-        {:error, error(403, "You cannot do this because you are not accountable for the target resource. Please contact #{e(resource, :primary_accountable, :character, :username, resource.primary_accountable_id)})")}
+        {:error, fail(403, "You cannot do this because you are not accountable for the target resource. Please contact #{e(resource, :primary_accountable, :character, :username, resource.primary_accountable_id)})")}
       end
     end
   end
@@ -673,8 +673,8 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
       :context_id,
       attrs |> Map.get(:in_scope_of) |> maybe(&List.first/1)
     )
-    |> maybe_put(:provider_id, attr_get_agent(attrs, :provider, creator))
-    |> maybe_put(:receiver_id, attr_get_agent(attrs, :receiver, creator))
+    |> maybe_put(:provider_id, Util.attr_get_agent(attrs, :provider, creator))
+    |> maybe_put(:receiver_id, Util.attr_get_agent(attrs, :receiver, creator))
     |> maybe_put(:input_of_id, attr_get_id(attrs, :input_of))
     |> maybe_put(:output_of_id, attr_get_id(attrs, :output_of))
     |> maybe_put(:resource_conforms_to_id, attr_get_id(attrs, :resource_conforms_to))
@@ -685,13 +685,6 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
     |> maybe_put(:calculated_using_id, attr_get_id(attrs, :calculated_using))
     |> Util.parse_measurement_attrs(creator)
     # |> IO.inspect(label: "Events: prepared attrs")
-  end
-
-  def attr_get_agent(attrs, field, creator) do
-    case Map.get(attrs, field) do
-      "me" -> maybe_get_id(creator)
-      other -> maybe_get_id(other)
-    end
   end
 
   def soft_delete(%EconomicEvent{} = event) do
@@ -726,6 +719,4 @@ defmodule ValueFlows.EconomicEvent.EconomicEvents do
       {:ok, event}
     end
   end
-
-
 end
