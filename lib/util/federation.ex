@@ -4,9 +4,11 @@ defmodule ValueFlows.Util.Federation do
   import Bonfire.Common.Config, only: [repo: 0]
   import Where
 
-  @log_graphql false
+  @log_graphql true
 
   @schema Bonfire.Common.Config.get!(:graphql_schema_module)
+
+  @actor_types ["Actor", "Person", "Organization", "Application", "Service"]
 
   @types_to_AP %{
     "Unit" => "om2:Unit", # using http://www.ontology-of-units-of-measure.org/resource/om-2/
@@ -14,7 +16,9 @@ defmodule ValueFlows.Util.Federation do
     "SpatialThing" => "Place", # using https://www.w3.org/TR/activitystreams-vocabulary/#places
   }
   @types_to_translate Map.keys(@types_to_AP)
-  @non_VF_types ["Person", "Organization"] ++ @types_to_translate
+  @non_VF_types @actor_types ++ @types_to_translate
+
+  @non_nested_objects ["id", "url", "href", "@context", "om2", "type", "und", "name", "summary", "content", "ValueFlows", "und"]
 
   @fields_to_AP %{
     "__typename" => "type",
@@ -29,6 +33,7 @@ defmodule ValueFlows.Util.Federation do
     "lat" => "latitude",
     "long" => "longitude",
   }
+
   @fields_from_AP Map.new(@fields_to_AP, fn {key, val} -> {val, key} end)
 
 
@@ -60,6 +65,8 @@ defmodule ValueFlows.Util.Federation do
     :intended_outputs,
     :inventoried_economic_resources,
     :tagged,
+    :track,
+    :trace,
     :geom, # see https://www.w3.org/TR/activitystreams-core/#extensibility
   ]
 
@@ -84,13 +91,18 @@ defmodule ValueFlows.Util.Federation do
 
       debug("ValueFlows.Federation - #{activity_type} #{schema_type}")
 
-      with %{} = api_object <- fetch_api_object(id, schema_type, query_depth, extra_field_filters) |> ap_prepare_object(),
+      with %{} = api_object <- fetch_api_object(id, schema_type, query_depth, extra_field_filters),
+           %{} = formated_object <- ap_prepare_object(api_object),
            %{} = activity_params <- ap_prepare_activity(
               activity_type,
               thing,
-              api_object
+              formated_object
             ) do
+
         ap_do(activity_type, activity_params, id)
+
+      else e ->
+        error(e, "Could not prepare VF object")
       end
     end
   end
@@ -101,7 +113,7 @@ defmodule ValueFlows.Util.Federation do
 
       activity
       # |> ActivityPubWeb.Transmogrifier.prepare_outgoing
-      |> debug("VF - ap_publish_activity - create")
+      |> info("VF - ap_publish_activity - create")
 
       # IO.puts(struct_to_json(activity.data))
       # IO.puts(struct_to_json(activity.object.data))
@@ -143,30 +155,24 @@ defmodule ValueFlows.Util.Federation do
 
     debug("ValueFlows.Federation - query all fields except #{inspect field_filters}")
 
-    with obj <-
-           Bonfire.API.GraphQL.QueryHelper.run_query_id(
-             id,
-             @schema,
-             schema_type,
-             query_depth,
-             &ap_graphql_fields(&1, field_filters),
-             @log_graphql
-           ) do
-
-      # debug(obj, "queried via API")
-
-      obj
-    end
+    Bonfire.API.GraphQL.QueryHelper.run_query_id(
+      id,
+      @schema,
+      schema_type,
+      query_depth,
+      &ap_graphql_fields(&1, field_filters),
+      @log_graphql
+    )
+    |> debug("queried via API")
 
   rescue e ->
-    error(e)
-    {:error, e}
+    error(e, "Could not fetch from VF API")
   end
 
   def ap_prepare_object(obj) do
     obj
     |> to_AP_deep_remap()
-    |> debug("ValueFlows.Federation - object prepared")
+    |> info("ValueFlows.Federation - object prepared")
   end
 
   def ap_prepare_activity(_activity_type, thing, ap_object, author_id \\ nil, object_ap_id \\ nil) do
@@ -174,16 +180,15 @@ defmodule ValueFlows.Util.Federation do
     if Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.Utils) do
 
       thing = thing
-              |> repo().maybe_preload(:creator)
-              |> repo().maybe_preload(:primary_accountable)
-              |> repo().maybe_preload(:provider)
-              |> repo().maybe_preload(:receiver)
+              |> repo().maybe_preload(creator: [character: [:peered]])
+              # |> repo().maybe_preload(:primary_accountable)
+              # |> repo().maybe_preload(:provider)
+              # |> repo().maybe_preload(:receiver)
 
       with context <-
-            maybe_get_ap_id_by_local_id(Map.get(ap_object, "context") |> dump),
+            maybe_get_ap_id_by_local_id(Map.get(ap_object, "context")),
           author <-
-            author_id || maybe_id(thing, :creator) || maybe_id(thing, :primary_accountable) ||
-              maybe_id(thing, :provider) || maybe_id(thing, :receiver),
+            author_id || maybe_id(thing, :creator) || maybe_id(thing, :primary_accountable) || maybe_id(thing, :provider),
           actor <- Bonfire.Federate.ActivityPub.Utils.get_cached_actor_by_local_id!(author),
           object_ap_id <- object_ap_id || URIs.canonical_url(thing),
           ap_object <-
@@ -199,12 +204,15 @@ defmodule ValueFlows.Util.Federation do
             to: [
                 (if Bonfire.Common.Config.get_ext(__MODULE__, :preset_boundary, "public")=="public", do: Bonfire.Federate.ActivityPub.Utils.public_uri()), # uses an instance-wide default for now
                 context,
-                URIs.canonical_url(e(thing, :primary_accountable, nil)),
-                URIs.canonical_url(e(thing, :provider, nil)),
-                URIs.canonical_url(e(thing, :receiver, nil)),
+                URIs.canonical_url(e(thing, :creator, nil)),
+                e(ap_object, "primaryAccountable", "id", nil),
+                e(ap_object, "provider", "id", nil),
+                e(ap_object, "receiver", "id", nil),
+                e(ap_object, "resourceInventoriedAs", "primaryAccountable", "id", nil),
               ]
               |> filter_empty([])
-              |> debug("AP recipients"),
+              |> Enum.uniq()
+              |> info("AP recipients"),
             cc: [actor.data["followers"]],
             object: ap_object,
             context: context,
@@ -216,7 +224,7 @@ defmodule ValueFlows.Util.Federation do
         |> debug("ValueFlows.Federation - activity prepared")
       end
     else
-      debug("VF - No integration available to federate activity")
+      error("VF - No integration available to federate activity")
     end
   end
 
@@ -229,18 +237,36 @@ defmodule ValueFlows.Util.Federation do
     # TODO: target right circles/boundaries based on to/cc
     attrs
     |> debug("ap_receive_activity - attrs to create")
-
-    fun.(creator, attrs)
+    |> fun.(creator, ...)
   end
 
   def ap_receive_activity(creator, activity, %{} = object, fun) do
-    attrs = e(object, :data, object)
+    e(object, :data, object)
     |> debug("ap_receive_activity - object to prepare")
     |> from_AP_deep_remap()
     |> input_to_atoms()
+    |> debug("ap_receive_activity - object to create")
     |> Map.put_new(:typename, nil)
+    |> ap_receive_activity(ensure_creator(creator, ...), activity, ..., fun)
+  end
 
-    ap_receive_activity(creator, activity, attrs, fun)
+  defp ensure_creator(%{} = creator, _object) do
+    creator
+  end
+  defp ensure_creator(_, %{creator: %{} = creator}) do
+    creator
+  end
+  defp ensure_creator(_, %{actor: %{} = creator}) do
+    creator
+  end
+  defp ensure_creator(_, %{primary_accountable: %{} = creator}) do
+    creator
+  end
+  defp ensure_creator(_, %{provider: %{} = creator}) do
+    creator
+  end
+  defp ensure_creator(_, _) do
+    nil
   end
 
   defp maybe_get_ap_id_by_local_id("http"<>_ = url) do # TODO better
@@ -386,28 +412,56 @@ defmodule ValueFlows.Util.Federation do
     val
   end
 
+  defp from_AP_remap("https://w3id.org/valueflows#"<>action_name, "action") when is_binary(action_name) do
+    action_name
+  end
 
-  defp from_AP_remap(%{"type" => _, "actor" => creator} = val, parent_key) when not is_nil(creator) do
-    create_nested_object(creator, val, parent_key)
+  # first create embeded nested objects that have actor/author info
+  defp from_AP_remap(%{"actor" => creator, "type"=>_, "id"=>_} = object, parent_key) when not is_nil(creator) do
+    maybe_create_nested_object(creator, object, parent_key)
   end
-  defp from_AP_remap(%{"type" => _, "attributedTo" => creator} = val, parent_key) when not is_nil(creator) do
-    create_nested_object(creator, val, parent_key)
+  defp from_AP_remap(%{"attributedTo" => creator, "type"=>_, "id"=>_} = object, parent_key) when not is_nil(creator) do
+    maybe_create_nested_object(creator, object, parent_key)
   end
-  defp from_AP_remap(%{"type" => _, "primaryAccountable" => creator} = val, parent_key) when not is_nil(creator) do
-    create_nested_object(creator, val, parent_key)
+  defp from_AP_remap(%{"primaryAccountable" => creator, "type"=>_, "id"=>_} = object, parent_key) when not is_nil(creator) do
+    maybe_create_nested_object(creator, object, parent_key)
   end
-  defp from_AP_remap(%{"type" => _, "provider" => creator} = val, parent_key) when not is_nil(creator) do
-    create_nested_object(creator, val, parent_key)
+  defp from_AP_remap(%{"provider" => creator, "type"=>_, "id"=>_} = object, parent_key) when not is_nil(creator) do
+    maybe_create_nested_object(creator, object, parent_key)
   end
-  defp from_AP_remap(%{"type" => _, "receiver" => creator} = val, parent_key) when not is_nil(creator) do
-    create_nested_object(creator, val, parent_key)
+  defp from_AP_remap(%{"receiver" => creator, "type"=>_, "id"=>_} = object, parent_key) when not is_nil(creator) do
+    maybe_create_nested_object(creator, object, parent_key)
   end
-  defp from_AP_remap(%{"agentType" => _} = val, parent_key) do
-    create_nested_object(val, val, parent_key)
+
+  # then create agents
+  defp from_AP_remap(%{"type" => type, "id"=>_} = object, parent_key) when type in @actor_types do
+    maybe_create_nested_object(nil, object, parent_key)
   end
-  defp from_AP_remap(%{"type" => _} = val, parent_key) do
-    # handle types without a known creator (should we be re-fetching the object?)
-    create_nested_object(nil, val, parent_key)
+  defp from_AP_remap(%{"agentType" => _, "id"=>_} = object, parent_key) do
+    maybe_create_nested_object(nil, object, parent_key)
+  end
+
+  # then try to handle objects without known authorship (maybe we should be re-fetching these?)
+  defp from_AP_remap(%{"type"=>_, "id"=>_} = object, parent_key) do
+    maybe_create_nested_object(nil, object, parent_key)
+  end
+
+  # then handle any non-embeded objects
+  defp from_AP_remap(val, parent_key) when is_binary(val) and parent_key not in @non_nested_objects do
+
+    with true <- Bonfire.Federate.ActivityPub.Utils.validate_url(val),
+    %{} = nested_object <- maybe_create_nested_object(nil, val, parent_key)
+    do
+      nested_object
+      |> info("created nested object from URI")
+    else
+      false ->
+        debug({val, parent_key}, "do not create nested object")
+        from_AP_deep_remap(val, parent_key)
+      e ->
+        error(e, "Failed to create nested object for #{parent_key} : #{inspect val}")
+        from_AP_deep_remap(val, parent_key)
+    end
   end
 
   defp from_AP_remap(val, parent_key) do
@@ -422,13 +476,31 @@ defmodule ValueFlows.Util.Federation do
     end
   end
 
-  def create_nested_object(creator, val, _parent_key) do # loop through nested objects
-    with {:ok, nested_object} <- Bonfire.Federate.ActivityPub.Receiver.receive_object(creator, val)
-    |> debug("created nested object")
+  def maybe_create_nested_object(creator, object_or_id, _parent_key) do # loop through nested objects
+
+    id = e(object_or_id, "id", object_or_id)
+    already_processed = if id do
+      case Process.get("uri_object:#{id}", false) do
+        false -> nil
+        nested_object ->
+          info(nested_object, "retrieved from Process dict")
+          {:ok, nested_object}
+      end
+    end
+
+    with {:ok, created_object} <- already_processed || Bonfire.Federate.ActivityPub.Receiver.receive_object(creator, object_or_id)
     do
-      nested_object
-    # else _ ->
-    #   {from_AP_field_rename(parent_key), from_AP_deep_remap(val, parent_key)}
+
+      if !already_processed && id do
+        Process.put("uri_object:#{id}", created_object)
+        info(id, "stored in Process dict")
+      end
+
+      created_object
+      |> info("created nested object")
+
+    else _ ->
+      nil # should we just return the original?
     end
   end
 
